@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#101a2a"><title>Duo L-Space Ball</title>
+<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101a2a;color:white;font-family:-apple-system,BlinkMacSystemFont,sans-serif;touch-action:none}canvas{display:block;width:100%;height:100%}.ui{position:fixed;left:12px;right:12px;top:max(12px,env(safe-area-inset-top));display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}.ui button,.controls button,.controls input{pointer-events:auto}button{border:1px solid #ffffff55;border-radius:10px;background:#142b48d9;color:white;padding:9px 12px;font-size:13px}.controls{position:fixed;bottom:max(12px,env(safe-area-inset-bottom));left:12px;right:12px;background:#102039dd;border:1px solid #ffffff33;border-radius:12px;padding:10px 12px;font-size:12px;transition:opacity .2s}.controls.hidden{opacity:0;pointer-events:none}.controlrow{display:flex;align-items:center;gap:10px;margin:6px 0}.controlrow label{width:105px;flex:none}.controlrow input{flex:1;min-width:0}.value{width:34px;text-align:right}.hint{font-size:11px;color:#c1d5e7;line-height:1.5;margin-top:5px}.title{font-weight:700;font-size:13px;text-shadow:0 2px 5px #000}.tiny{font-size:11px;color:#c6d8eb;margin-top:4px}</style></head>
+<body><canvas id="scene"></canvas><div class="ui"><div><div class="title">L-SPACE BALL</div><div class="tiny">90°折りたたみ実験 / 画面タップで再スタート</div></div><button id="toggle">設定を隠す</button></div>
+<div class="controls" id="controls"><div class="controlrow"><label for="hinge">折り目位置</label><input id="hinge" type="range" min="30" max="70" value="50" step="1"><span class="value" id="hingeVal">50%</span></div><div class="controlrow"><label for="speed">移動速度</label><input id="speed" type="range" min="0.2" max="2.5" value="0.8" step="0.1"><span class="value" id="speedVal">0.8</span></div><div class="controlrow"><label for="depth">上画面の遠近感</label><input id="depth" type="range" min="0.5" max="3" value="1.4" step="0.1"><span class="value" id="depthVal">1.4</span></div><div class="hint">端末を縦向きにして90°に折り、下半分を机に置いてください。折り目の位置はスライダーで調整できます。画面の中央をまたいでボールが往復します。</div></div>
+<script>
+(()=>{'use strict';const canvas=document.querySelector('#scene'),ctx=canvas.getContext('2d');const hinge=document.querySelector('#hinge'),speed=document.querySelector('#speed'),depth=document.querySelector('#depth');const controls=document.querySelector('#controls'),toggle=document.querySelector('#toggle');let W=0,H=0,dpr=1,last=0,phase=0,dir=1;const range=2.9;function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0)}window.addEventListener('resize',resize);resize();function val(){document.querySelector('#hingeVal').textContent=hinge.value+'%';document.querySelector('#speedVal').textContent=speed.value;document.querySelector('#depthVal').textContent=depth.value}for(const i of [hinge,speed,depth])i.addEventListener('input',val);toggle.addEventListener('click',()=>{controls.classList.toggle('hidden');toggle.textContent=controls.classList.contains('hidden')?'設定を表示':'設定を隠す'});canvas.addEventListener('pointerdown',()=>{phase=0;dir=1});val();
+function line(x1,y1,x2,y2,color,width=1){ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+function render(t){const dt=Math.min((t-last)/1000||0,.05);last=t;phase+=dt*Number(speed.value)*dir;if(phase>range){phase=range;dir=-1}else if(phase<0){phase=0;dir=1}const fold=H*Number(hinge.value)/100;const bottom=H-fold;const horizon=Math.max(32,fold*.2);const center=W/2;const d=Number(depth.value);ctx.clearRect(0,0,W,H);
+// Upper display: vertical continuation of a receding floor.
+const sky=ctx.createLinearGradient(0,0,0,fold);sky.addColorStop(0,'#152a43');sky.addColorStop(.7,'#376c91');sky.addColorStop(1,'#84aabe');ctx.fillStyle=sky;ctx.fillRect(0,0,W,fold);ctx.fillStyle='#547b91';ctx.beginPath();ctx.moveTo(0,horizon);ctx.lineTo(W,horizon);ctx.lineTo(W,fold);ctx.lineTo(0,fold);ctx.fill();
+// Lower display: foreground floor.
+const fg=ctx.createLinearGradient(0,fold,0,H);fg.addColorStop(0,'#6f99ac');fg.addColorStop(1,'#c4e3e3');ctx.fillStyle=fg;ctx.fillRect(0,fold,W,bottom);
+// Lower display is viewed from directly above: square tiles, no perspective.
+// Keep the grid square in CSS pixels and align a horizontal grid line to the hinge.
+const tile=Math.max(24,Math.min(W/6,64));
+for(let x=center%tile;x<W;x+=tile)line(x,fold,x,H,'#e8fbff45',1.2);
+for(let x=center%tile-tile;x>=0;x-=tile)line(x,fold,x,H,'#e8fbff45',1.2);
+for(let y=fold;y<=H;y+=tile)line(0,y,W,y,'#e8fbff45',1.2);
+// Upper display represents the floor extending away from the hinge.
+// The nearest row at the hinge has exactly the same tile width as the lower grid.
+const vanishY=horizon;const focal=Math.max(1,fold-horizon);
+function project(z){const k=1/(1+z*d*.95);return {y:vanishY+focal*k,k};}
+for(let i=-12;i<=12;i++){
+ const x=center+i*tile;
+ line(x,fold,center+(x-center)*.025,vanishY,'#e8fbff42',1.1);
+}
+for(let j=1;j<=22;j++){
+ const q=project(j*tile/focal);
+ if(q.y<=vanishY+2)break;
+ line(0,q.y,W,q.y,'#e8fbff38',1.1);
+}
+// Fold seam: calibration marker.
+line(0,fold,W,fold,'#fff7',1.5);ctx.fillStyle='#ffffffaa';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText('HINGE',W-12,fold-8);
+// Lower: orthographic top-down view, constant radius. Upper: perspective projection.
+const cross=1.35;const baseR=Math.min(W,H)*.085;
+let y,r;
+if(phase<=cross){const u=phase/cross;y=H-(H-fold)*u;r=baseR;}
+else{const u=(phase-cross)/(range-cross);const distance=u*3.1;const q=project(distance);y=q.y;r=Math.max(3,baseR*q.k);}
+const bob=Math.sin(phase*15)*r*.025;
+ctx.fillStyle='#0b263b55';ctx.beginPath();ctx.ellipse(center+r*.12,y+r*.72,r*.95,r*.22,0,0,Math.PI*2);ctx.fill();const g=ctx.createRadialGradient(center-r*.3,y-r*.4+bob,r*.1,center,y+bob,r);g.addColorStop(0,'#ffe2a1');g.addColorStop(.36,'#ffad49');g.addColorStop(1,'#c94d24');ctx.fillStyle=g;ctx.beginPath();ctx.arc(center,y+bob,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#a74728';ctx.lineWidth=Math.max(1,r*.07);ctx.beginPath();ctx.ellipse(center,y+bob,r*.48,r*.92,phase*3,0,Math.PI*2);ctx.stroke();
+requestAnimationFrame(render)}requestAnimationFrame(render)})();
+</script></body></html>
